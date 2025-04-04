@@ -8,7 +8,7 @@ from .shapley_utils import shapley_contributions
 
 
 def flwr_contribution_strategy(strategy: flwr.server.strategy):
-    class FedContrib(strategy):
+    class flwr_contribution(strategy):
         def aggregate_fit(
             self,
             server_round: int,
@@ -28,4 +28,4 @@ def flwr_contribution_strategy(strategy: flwr.server.strategy):
             print(contributions)
             return super().aggregate_fit(server_round, results, failures)
 
-    return FedContrib
+    return flwr_contribution

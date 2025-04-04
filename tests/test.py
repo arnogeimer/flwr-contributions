@@ -6,7 +6,7 @@ import torch
 from flwr.common import ndarrays_to_parameters
 from flwr.server.strategy import FedAvg
 
-from src.flwr_contributions.FedContrib import flwr_contribution_strategy
+from flwr_contributions.flwr_contributions import flwr_contribution_strategy
 
 init_model = client.get_model()
 initial_parameters = ndarrays_to_parameters(client.ndarrays_from_model(init_model))
