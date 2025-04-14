@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 def get_model() -> torch.nn.Module:
     return torch.hub.load(
-        "pytorch/vision:v0.10.0", "resnet18", weights=None, verbose=False
+        "pytorch/vision:v0.10.0", "mobilenet_v3_small", weights=None, verbose=False
     ).cuda()
 
 

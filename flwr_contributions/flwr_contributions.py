@@ -1,13 +1,12 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import flwr.server.strategy
 from flwr.common import FitRes, Parameters, Scalar
 from flwr.server.client_proxy import ClientProxy
 
-from .shapley_utils import shapley_contributions
 
 
-def flwr_contribution_strategy(strategy: flwr.server.strategy):
+def flwr_contribution_strategy(strategy: flwr.server.strategy, contribution_method: Callable):
     class flwr_contribution(strategy):
         def aggregate_fit(
             self,
@@ -18,7 +17,7 @@ def flwr_contribution_strategy(strategy: flwr.server.strategy):
             # Do not aggregate if there are failures and failures are not accepted
             if not self.accept_failures and failures:
                 return None, {}
-            contributions = shapley_contributions(
+            contributions = contribution_method(
                 server_round=server_round,
                 results=results,
                 failures=failures,

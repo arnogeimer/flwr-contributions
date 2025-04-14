@@ -7,6 +7,8 @@ from flwr.common import ndarrays_to_parameters
 from flwr.server.strategy import FedAvg
 
 from flwr_contributions.flwr_contributions import flwr_contribution_strategy
+from flwr_contributions.shapley_utils import shapley_contributions
+from flwr_contributions.loo import loo_contributions
 
 init_model = client.get_model()
 initial_parameters = ndarrays_to_parameters(client.ndarrays_from_model(init_model))
@@ -21,7 +23,7 @@ client_resources: dict = {
     "num_gpus": 1,
 }
 
-FedContrib = flwr_contribution_strategy(FedAvg)
+FedContrib = flwr_contribution_strategy(FedAvg, loo_contributions)
 
 starttime = time.time()
 hist = fl.simulation.start_simulation(
