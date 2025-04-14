@@ -1,8 +1,5 @@
-import random
-from itertools import chain, combinations
 from typing import Callable, List, Tuple, Union
 
-import numpy as np
 from flwr.common import FitRes, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
@@ -16,7 +13,7 @@ def loo_contributions(
 ) -> Tuple[int, Tuple[int], float, float]:
 
     """
-    A function calculating Leave-one-out contributions, based on results sent to the server.
+    A function calculating Leave-one-out contributions (source: https://arxiv.org/pdf/1909.08525).
     Is plugged into aggregate_fit in the flwr.strategy.
     """
 
