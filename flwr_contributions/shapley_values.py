@@ -1,4 +1,3 @@
-import random
 from itertools import chain, combinations
 from typing import Callable, List, Tuple, Union
 
@@ -6,9 +5,15 @@ import numpy as np
 from flwr.common import FitRes, parameters_to_ndarrays
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
+import warnings
 
 """ Samplers are implementations of https://arxiv.org/abs/2104.12199 """
 """ Using Samplers in FL has been proposed in https://arxiv.org/pdf/2109.02053 """
+
+def int_to_set(x: int, results: List[int]) -> tuple[int]:
+    bin = format(x, 'b').rjust(len(results), '0')
+    sample = tuple([results[i] for i, entry in enumerate(bin) if entry == "1"])
+    return sample
 
 class Sampler(object):
     def __init__(self, results: List[int]) -> None:
@@ -40,7 +45,9 @@ class FullSampler(Sampler):
         super().__init__(results)
 
     def generate_samples(self):
-        self.samples = self.pws
+        warnings.warn("""Warning: It is not recommended to use the full sampler for high amount of clients.
+                         Due to exponential growth of powerset sizes, your system may kill the process.""")
+        self.samples = list(chain.from_iterable(combinations(self.results, r) for r in range(1, len(self.results) + 1)))
 
 
 class LeaveOneOutSampler(Sampler):
@@ -58,13 +65,13 @@ class MonteCarloSampler(Sampler):
 
     def __init__(self, results: List[int], **kwargs):
         super().__init__(results)
-        sample_ratio = kwargs.get("sample_ratio", 0.1)
-        self.samplesize = max(int(len(self.pws) * sample_ratio), 1)
+        self.samplesize = kwargs.get("sample_number", 10)
         self.seed = kwargs.get("seed", 1)
 
     def generate_monte_carlo_samples(self):
-        random.seed(self.seed)
-        self.samples = random.sample(self.pws, k=self.samplesize)
+        # Due to the computational complexity of power sets, we uniformly sample powerset indices and fit the subset through the binary representation
+        np.random.seed(self.seed)
+        self.samples = [int_to_set(entry, self.results) for entry in np.random.randint(0, 2**len(self.results), self.samplesize)]
 
     def generate_samples(self):
         self.generate_monte_carlo_samples()
@@ -89,17 +96,16 @@ class MultilinearExtensionSampler(Sampler):
 
     def __init__(self, results: List[int], **kwargs):
         super().__init__(results)
-        sample_ratio = kwargs.get("sample_ratio", 0.05)
-        self.samplesize = max(int(len(self.pws) * sample_ratio), 1)
+        self.samplesize = kwargs.get("sample_number", 10)
         self.seed = kwargs.get("seed", 1)
 
     def generate_multilinear_extension_samples(self):
         probabilities = np.linspace(0, 1, self.samplesize + 2)[1:-1]
         samples = []
-        random.seed(self.seed)
+        np.random.seed(self.seed)
         for probability in probabilities:
             sampler = [
-                (random.random() < probability) for _ in range(len(self.results))
+                (np.random.rand() < probability) for _ in range(len(self.results))
             ]
             if True in sampler:
                 samples.append(
@@ -136,20 +142,35 @@ class StratifiedSampler(Sampler):
 
     def __init__(self, results: List[int], **kwargs):
         super().__init__(results)
-        sample_ratio = kwargs.get("sample_ratio", 0.05)
-        self.samplesize = max(int(len(self.pws) * sample_ratio), 1)
+        # We search for the optimal split to account for the samplesize the user specifies.
+        # By splitting into smaller and smaller subsets, we decrease the total amount of samples.
+        # With find_best_split_size, we search for the amount of subsets which is just below the desired sample size.
+        # Note that, for too small sample sizes (below len(results)), we have to ignore "sample_number", as a stratified sampling would be impossible.
+        def find_best_split_size():
+            k = len(results)
+            sizes = np.array([(i - (k%i))*(2**(int(k / i))) + (k % i)*(2**(int(k / i) + 1)) for i in range(1, len(results))])
+            samplesize = kwargs.get("sample_number", 10)
+            try:
+                best_i = min(np.flatnonzero(sizes < samplesize)) + 1
+            except Exception:
+                best_i = k
+            return np.cumsum([0] + (best_i - (k % best_i))*[int(k / best_i)] + (k % best_i) * [int(k / best_i) + 1])
+        self.split_sets = find_best_split_size()
         self.seed = kwargs.get("seed", 1)
 
         np.random.seed(self.seed)
         np.random.shuffle(self.results)
 
-    def generate_samples(self):
+    def generate_stratified_samples(self):
         splits = [
-            self.results[i : i + self.samplesize]
-            for i in range(0, len(self.results), self.samplesize)
+            self.results[self.split_sets[i] : self.split_sets[i + 1]]
+            for i in range(0, len(self.split_sets) - 1)
         ]
-        samples = [self.create_powerset(entry) for entry in splits]
+        samples = [list(chain.from_iterable(combinations(entry, r) for r in range(1, len(entry) + 1))) for entry in splits]
         self.samples = [tuple(set(x)) for subset in samples for x in subset]
+    
+    def generate_samples(self):
+        self.generate_stratified_samples()
         self.generate_test_samples()
 
 
