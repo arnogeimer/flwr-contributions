@@ -8,16 +8,12 @@ from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
 """ Samplers are implementations of https://arxiv.org/abs/2104.12199 """
+""" Using Samplers in FL has been proposed in https://arxiv.org/pdf/2109.02053 """
 
 class Sampler(object):
     def __init__(self, results: List[int]) -> None:
-        self.results = results
-        self.pws = self.create_powerset(self.results)
-
-    def create_powerset(self, set: List[int]) -> chain:
-        "Returns the powerset of a set"
-        pws = chain.from_iterable(combinations(set, r) for r in range(1, len(set) + 1))
-        return list(pws)
+        self.results: List[int] = results
+        self.samples = None
 
     def add_antithetic_samples(self):
         # adds anti-samples to self.samples
@@ -54,7 +50,7 @@ class LeaveOneOutSampler(Sampler):
         super().__init__(results)
 
     def generate_samples(self):
-        self.samples = [[j for j in self.results if j != i] for i in self.results] + [self.results]
+        self.samples = sorted([[j for j in self.results if j != i] for i in self.results] + [self.results])
 
 
 class MonteCarloSampler(Sampler):
@@ -200,7 +196,7 @@ def one_round_reconstruction(
     failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     evaluate_fn: Callable,
     aggregate_fit: Callable = FedAvg.aggregate_fit,
-    samples: Sampler.samples = [],
+    samples: List[List[int]] = [],
     initial_parameters = None,
     final_round: int = 0,
 ) -> Tuple[int, Tuple[int], float, float]:
