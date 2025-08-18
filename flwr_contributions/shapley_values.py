@@ -18,42 +18,41 @@ def int_to_set(x: int, results: List[int]) -> tuple[int]:
 
 
 class Sampler(object):
-    def __init__(self, results: List[int]) -> None:
-        self.results: List[int] = results
+    def __init__(self, ) -> None:
         self.samples = None
 
-    def add_antithetic_samples(self):
-        # adds anti-samples to self.samples
-        antisamples = [
-            tuple([x for x in self.results if x not in entry]) for entry in self.samples
-        ]
-        self.samples += antisamples
-
-    def generate_test_samples(self):
+    def generate_test_samples(self, results: List[int]):
         # Returns [entry + i for entry in samples if i not in entry]
         evaluation_samples = []
         self.samples = [entry for entry in self.samples if entry != ()]
         for entry in self.samples:
-            for k in self.results:
+            for k in results:
                 if k not in entry:
                     evaluation_samples.append(tuple(sorted(list(entry + (k,)))))
         self.samples = list(set(self.samples + evaluation_samples))
+
+    def add_antithetic_samples(self, results: List[int]):
+        # adds anti-samples to self.samples
+        antisamples = [
+            tuple([x for x in results if x not in entry]) for entry in self.samples
+        ]
+        self.samples += antisamples
 
 
 class FullSampler(Sampler):
     # Full powerset sampler
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results)
+    def __init__(self, **kwargs):
+        super().__init__()
 
-    def generate_samples(self):
+    def generate_samples(self, results: List[int]):
         warnings.warn(
             """Warning: It is not recommended to use the full sampler for high amount of clients.
                          Due to exponential growth of powerset sizes, your system may kill the process."""
         )
         self.samples = list(
             chain.from_iterable(
-                combinations(self.results, r) for r in range(1, len(self.results) + 1)
+                combinations(results, r) for r in range(1, len(results) + 1)
             )
         )
 
@@ -61,132 +60,131 @@ class FullSampler(Sampler):
 class LeaveOneOutSampler(Sampler):
     # Leave-one-out
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results)
+    def __init__(self, **kwargs):
+        super().__init__()
 
-    def generate_samples(self):
+    def generate_samples(self, results: List[int]):
         self.samples = sorted(
-            [[j for j in self.results if j != i] for i in self.results] + [self.results]
+            [[j for j in results if j != i] for i in results] + [results]
         )
 
 
 class MonteCarloSampler(Sampler):
     # Uniform sampler from powerset
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results)
-        self.samplesize = kwargs.get("sample_number", 10)
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.samplesize = kwargs.get("samplesize", 10)
         self.seed = kwargs.get("seed", 1)
 
-    def generate_monte_carlo_samples(self):
+    def generate_monte_carlo_samples(self, results: List[int]):
         # Due to the computational complexity of power sets, we uniformly sample powerset indices and fit the subset through the binary representation
         np.random.seed(self.seed)
         self.samples = [
-            int_to_set(entry, self.results)
-            for entry in np.random.randint(0, 2 ** len(self.results), self.samplesize)
+            int_to_set(entry, results)
+            for entry in np.random.randint(0, 2 ** len(results), self.samplesize)
         ]
 
-    def generate_samples(self):
-        self.generate_monte_carlo_samples()
-        self.generate_test_samples()
+    def generate_samples(self, results: List[int]):
+        self.generate_monte_carlo_samples(results)
+        self.generate_test_samples(results)
 
 
 class AntitheticMonteCarloSampler(MonteCarloSampler):
     # Antithetic: If x is in E, so is !x
     # Antithetic for a Monte Carlo Sampler
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    def generate_samples(self):
-        self.generate_monte_carlo_samples()
-        self.add_antithetic_samples()
-        self.generate_test_samples()
+    def generate_samples(self, results: List[int]):
+        self.generate_monte_carlo_samples(results)
+        self.add_antithetic_samples(results)
+        self.generate_test_samples(results)
 
 
 class MultilinearExtensionSampler(Sampler):
     # Samples contain client i with probability pk for 0 < pk < 1
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results)
-        self.samplesize = kwargs.get("sample_number", 10)
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.samplesize = kwargs.get("samplesize", 10)
         self.seed = kwargs.get("seed", 1)
 
-    def generate_multilinear_extension_samples(self):
+    def generate_multilinear_extension_samples(self, results: List[int]):
         probabilities = np.linspace(0, 1, self.samplesize + 2)[1:-1]
         samples = []
         np.random.seed(self.seed)
         for probability in probabilities:
             sampler = [
-                (np.random.rand() < probability) for _ in range(len(self.results))
+                (np.random.rand() < probability) for _ in range(len(results))
             ]
             if True in sampler:
                 samples.append(
                     tuple(
                         [
-                            self.results[i]
-                            for i in range(len(self.results))
+                            results[i]
+                            for i in range(len(results))
                             if sampler[i]
                         ]
                     )
                 )
         self.samples = samples
 
-    def generate_samples(self):
-        self.generate_multilinear_extension_samples()
-        self.generate_test_samples()
+    def generate_samples(self, results: List[int], ):
+        self.generate_multilinear_extension_samples(results)
+        self.generate_test_samples(results)
 
 
 class AntitheticMultilinearExtensionSampler(MultilinearExtensionSampler):
     # Antithetic: If x is in E, so is !x
     # Antithetic for a Multilinear Extension Sampler
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    def generate_samples(self):
-        self.generate_multilinear_extension_samples()
-        self.add_antithetic_samples()
-        self.generate_test_samples()
+    def generate_samples(self, results: List[int], ):
+        self.generate_multilinear_extension_samples(results)
+        self.add_antithetic_samples(results)
+        self.generate_test_samples(results)
 
 
 class StratifiedSampler(Sampler):
     # E = pws(D_1) u pws(D_2) u pws(D3) u ... , where D = D1 |u| D2 |u| D3 ...
 
-    def __init__(self, results: List[int], **kwargs):
-        super().__init__(results)
-
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.samplesize = kwargs.get("samplesize", 10)
+        self.seed = kwargs.get("seed", 1)
         # We search for the optimal split to account for the samplesize the user specifies.
         # By splitting into smaller and smaller subsets, we decrease the total amount of samples.
         # With find_best_split_size, we search for the amount of subsets which is just below the desired sample size.
         # Note that, for too small sample sizes (below len(results)), we have to ignore "sample_number", as a stratified sampling would be impossible.
-        def find_best_split_size():
-            k = len(results)
-            sizes = np.array(
-                [
-                    (i - (k % i)) * (2 ** (int(k / i)))
-                    + (k % i) * (2 ** (int(k / i) + 1))
-                    for i in range(1, len(results))
-                ]
-            )
-            samplesize = kwargs.get("sample_number", 10)
-            try:
-                best_i = min(np.flatnonzero(sizes < samplesize)) + 1
-            except Exception:
-                best_i = k
-            return np.cumsum(
-                [0]
-                + (best_i - (k % best_i)) * [int(k / best_i)]
-                + (k % best_i) * [int(k / best_i) + 1]
-            )
 
-        self.split_sets = find_best_split_size()
-        self.seed = kwargs.get("seed", 1)
+    def find_best_split_size(self, results: List[int]):
+        k = len(results)
+        sizes = np.array(
+            [
+                (i - (k % i)) * (2 ** (int(k / i)))
+                + (k % i) * (2 ** (int(k / i) + 1))
+                for i in range(1, len(results))
+            ]
+        )
+        try:
+            best_i = min(np.flatnonzero(sizes < self.samplesize)) + 1
+        except Exception:
+            best_i = k
+        return np.cumsum(
+            [0]
+            + (best_i - (k % best_i)) * [int(k / best_i)]
+            + (k % best_i) * [int(k / best_i) + 1]
+        )
+
+    def generate_stratified_samples(self, results: List[int]):
+        self.split_sets = self.find_best_split_size(results)
 
         np.random.seed(self.seed)
         np.random.shuffle(self.results)
-
-    def generate_stratified_samples(self):
         splits = [
             self.results[self.split_sets[i] : self.split_sets[i + 1]]
             for i in range(0, len(self.split_sets) - 1)
@@ -201,9 +199,9 @@ class StratifiedSampler(Sampler):
         ]
         self.samples = [tuple(set(x)) for subset in samples for x in subset]
 
-    def generate_samples(self):
-        self.generate_stratified_samples()
-        self.generate_test_samples()
+    def generate_samples(self, results: List[int]):
+        self.generate_stratified_samples(results)
+        self.generate_test_samples(results)
 
 
 def multi_round_reconstruction(
@@ -213,7 +211,6 @@ def multi_round_reconstruction(
     evaluate_fn: Callable,
     aggregate_fit: Callable = FedAvg.aggregate_fit,
     sampler: Sampler = FullSampler,
-    sample_ratio: float = 0.5,
 ) -> Tuple[int, Tuple[int], float, float]:
     """
     A function calculating multi-round Shapley-value contributions, based on results sent to the server (source: https://arxiv.org/pdf/1909.08525).
@@ -229,8 +226,8 @@ def multi_round_reconstruction(
     result_ids = [fitres.metrics["client_id"] for (_, fitres) in results]
     results_sorted = [result for _, result in sorted(zip(result_ids, results))]
     # Get a sample of clients for evaluation. Seeded by server round for reproducibility.
-    sampler = sampler(result_ids, sample_ratio=sample_ratio, seed=server_round)
-    sampler.generate_samples()
+    sampler = sampler(seed=server_round)
+    sampler.generate_samples(result_ids)
     if len(sampler.samples) == 0:
         return None
     shapley_dict: List = []
@@ -240,6 +237,7 @@ def multi_round_reconstruction(
         weights_aggregated = parameters_to_ndarrays(parameters_aggregated)
         loss, metrics = evaluate_fn(server_round, weights_aggregated, {})
         shapley_dict.append([subset, loss, metrics["accuracy"]])
+        print(subset, loss, metrics["accuracy"])
     return shapley_dict
 
 

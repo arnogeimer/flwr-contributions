@@ -1,4 +1,4 @@
-import flwr_contributions as flcon
+from flwr_contributions import shapley_values as flcon
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -10,17 +10,39 @@ from pyarrow import feather
 
 def create_baseline_strategy(
     parent_strategy: fl.server.strategy,
-    initial_parameters: Parameters,
+    sampler: flcon.Sampler = flcon.MonteCarloSampler,
 ):
 
-    class BaselineContribution(parent_strategy):
+    '''
+    Example usage:
+    
+    from flwr_contributions.baseline_strategy import create_baseline_strategy
+    import flwr_contributions.shapley_values as flcon
+
+    sampler = flcon.MonteCarloSampler
+    sampler.samplesize = 1
+    sampler.seed = 1
+
+    def start_simulation():
+        strategy = create_baseline_strategy(FedAvg, sampler)
+        hist = fl.simulation.start_simulation(
+            client_fn=client_fn,
+            num_clients=10,
+            config=fl.server.ServerConfig(num_rounds=5),
+            strategy=strategy(
+                initial_parameters=get_initial_parameters(),
+                evaluate_fn=evaluate_fn,
+                on_fit_config_fn=fit_config,
+            ),
+        )
+    '''
+
+    class Baseline(parent_strategy):
         def __init__(
             self,
-            initial_parameters: Parameters = initial_parameters,
+            initial_parameters: Parameters = None,
             fraction_fit: float = 1.0,
             fraction_evaluate: float = 1.0,
-            sampler: flcon.Sampler = flcon.MonteCarloSampler,
-            sample_ratio: float = 0.5,
             min_fit_clients: int = 2,
             min_evaluate_clients: int = 2,
             min_available_clients: int = 2,
@@ -46,7 +68,6 @@ def create_baseline_strategy(
             self.min_available_clients = min_available_clients
 
             self.sampler = sampler
-            self.sample_ratio = sample_ratio
             self.df = []
 
         def aggregate_fit(
@@ -69,11 +90,9 @@ def create_baseline_strategy(
                                              self.evaluate_fn,
                                              super().aggregate_fit,
                                              self.sampler,
-                                             self.sample_ratio
                                              )
-
             return super().aggregate_fit(
                 server_round, results, failures
             )
 
-    return BaselineContribution
+    return Baseline
