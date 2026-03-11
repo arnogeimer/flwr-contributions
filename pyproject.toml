@@ -52,7 +52,10 @@ local-epochs = 1
 split-method = "uniform"
 dirichlet-alpha = 0.5
 
-# Sampler
+# Aggregation
+aggregation-strategy = "fedavg"
+
+# Shapley
 use-contributions = true
 contribution-method = "multi-round"
 sampler-type = "mallows"

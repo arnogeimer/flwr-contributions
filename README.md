@@ -2,8 +2,6 @@
 
 Shapley-value-based client contribution measurement for the [Flower](https://flower.ai) federated learning framework.
 
-This work was used in the paper [On the Volatility of Shapley-Based Contribution Metrics in Federated Learning](https://arxiv.org/abs/2405.08044), presented at IJCNN 2025.
-
 ---
 
 ## What this is
@@ -14,20 +12,20 @@ Shapley values are computed via the permutation-based formula:
 
 $$\phi_i = \frac{1}{m} \sum_{\pi} \left[ v(P_i^\pi \cup \{i\}) - v(P_i^\pi) \right]$$
 
-where $v$ is a valuation function (e.g. accuracy on a held-out test set), $\pi$ ranges over sampled permutations, and $P_i^\pi$ is the set of clients preceding $i$ in $\pi$.
+where $v$ is the model accuracy on a held-out test set, $\pi$ ranges over sampled permutations, and $P_i^\pi$ is the set of clients preceding $i$ in $\pi$.
 
 ---
 
 ## Samplers
 
-Exact Shapley computation requires enumerating all $n!$ permutations, which is infeasible for large $n$. We support approximate samplers from [Kolpaczki et al. (2024)](https://arxiv.org/pdf/2104.12199):
+Exact Shapley computation requires enumerating all $n!$ permutations, which is infeasible for large $n$. We support approximate samplers from [Mitchell et al. (2021)](https://arxiv.org/pdf/2104.12199):
 
 | Sampler | Description |
 |---|---|
 | `FullSampler` | Enumerates all permutations (exact, $n \leq 10$) |
 | `MonteCarloSampler` | Uniform random permutations |
 | `AntitheticMonteCarloSampler` | Monte Carlo + inverse permutations for variance reduction |
-| `StratifiedSampler` | Samples from stratified client subgroups |
+| `StratifiedSampler` | Samples from stratified client subgroups (non-functional) |
 | `KendallSampler` | Greedy kernel-based selection using Kendall's tau distance |
 | `MallowsSampler` | Greedy kernel-based selection using the Mallows kernel |
 | `SpearmanSampler` | Greedy kernel-based selection using Spearman's rho distance |

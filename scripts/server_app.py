@@ -8,7 +8,7 @@ import torch
 from flwr.common import Context, FitRes, NDArrays, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.client_proxy import ClientProxy
-from flwr.server.strategy import FedAvg
+from flwr.server.strategy import FedAdam, FedAdagrad, FedAvg, FedAvgM
 
 from flwr_shapley.federated_shapley import MultiRoundReconstructor, OneRoundReconstructor
 from shapley.kernel_samplers import KendallSampler, MallowsSampler, SpearmanSampler
@@ -88,7 +88,7 @@ def create_contribution_strategy(
                     sampler=sampler,
                     evaluate_fn=evaluate_fn,
                     num_rounds=num_rounds,
-                    aggregate_fit=super().aggregate_fit,
+                    aggregate_fit=FedAvg(evaluate_fn=evaluate_fn).aggregate_fit,
                 )
 
         def aggregate_fit(
@@ -155,6 +155,15 @@ def server_fn(context: Context) -> ServerAppComponents:
     }
     SamplerClass = SAMPLERS.get(sampler_type, MonteCarloSampler)
 
+    STRATEGIES = {
+        "fedavg": FedAvg,
+        "fedadam": FedAdam,
+        "fedadagrad": FedAdagrad,
+        "fedavgm": FedAvgM,
+    }
+    aggregation_strategy: str = str(run_config.get("aggregation-strategy", "fedavg"))
+    ParentStrategy = STRATEGIES.get(aggregation_strategy, FedAvg)
+
     # Dynamically import the task module
     mltask = importlib.import_module(f"task.{experiment}")
 
@@ -177,13 +186,13 @@ def server_fn(context: Context) -> ServerAppComponents:
 
     if use_contributions:
         StrategyClass = create_contribution_strategy(
-            parent_strategy=FedAvg,
+            parent_strategy=ParentStrategy,
             sampler=SamplerClass(samplesize=num_samples, seed=42),
             method=contribution_method,
             num_rounds=num_rounds,
         )
     else:
-        StrategyClass = FedAvg
+        StrategyClass = ParentStrategy
 
     strategy = StrategyClass(
         fraction_fit=float(run_config.get("fraction-fit", 1.0)),
