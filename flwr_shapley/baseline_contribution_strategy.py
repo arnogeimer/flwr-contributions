@@ -1,4 +1,5 @@
-from flwr_contributions import shapley_values as flcon
+from flwr_shapley import federated_shapley as flcon
+from shapley.probabilistic_samplers import MonteCarloSampler, Sampler
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -10,7 +11,7 @@ from pyarrow import feather
 
 def create_baseline_strategy(
     parent_strategy: fl.server.strategy,
-    sampler: flcon.Sampler = flcon.MonteCarloSampler,
+    sampler: Sampler = MonteCarloSampler,
 ):
 
     '''
