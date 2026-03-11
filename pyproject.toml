@@ -54,6 +54,6 @@ dirichlet-alpha = 0.5
 
 # Sampler
 use-contributions = true
-contribution-method = "one-round"
-sampler-type = "monte-carlo"
+contribution-method = "multi-round"
+sampler-type = "mallows"
 num-samples = 2

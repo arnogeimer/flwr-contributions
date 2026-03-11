@@ -10,7 +10,7 @@ from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
-from flwr_shapley.federated_shapley import OneRoundReconstructor, multi_round_reconstruction
+from flwr_shapley.federated_shapley import MultiRoundReconstructor, OneRoundReconstructor
 from shapley.kernel_samplers import KendallSampler, MallowsSampler, SpearmanSampler
 from shapley.probabilistic_samplers import (
     AntitheticMonteCarloSampler,
@@ -83,6 +83,13 @@ def create_contribution_strategy(
                     evaluate_fn=evaluate_fn,
                     num_rounds=num_rounds,
                 )
+            elif method == "multi-round":
+                self.reconstructor = MultiRoundReconstructor(
+                    sampler=sampler,
+                    evaluate_fn=evaluate_fn,
+                    num_rounds=num_rounds,
+                    aggregate_fit=super().aggregate_fit,
+                )
 
         def aggregate_fit(
             self,
@@ -109,16 +116,11 @@ def create_contribution_strategy(
                     print(f"[shapley] Final Shapley values: {shapley_result}")
 
             elif self.method == "multi-round":
-                shapley_result = multi_round_reconstruction(
-                    server_round,
-                    results,
-                    failures,
-                    self.evaluate_fn,
-                    super().aggregate_fit,
-                    self.sampler,
+                shapley_result = self.reconstructor.on_round(
+                    server_round, results, failures,
                 )
                 if shapley_result is not None:
-                    print(f"[shapley] Round {server_round} Shapley values: {shapley_result}")
+                    print(f"[shapley] Final Shapley value history: {shapley_result}")
 
             # Perform normal aggregation
             aggregated = super().aggregate_fit(server_round, results, failures)
@@ -145,7 +147,7 @@ def server_fn(context: Context) -> ServerAppComponents:
     SAMPLERS = {
         "monte-carlo": MonteCarloSampler,
         "antithetic": AntitheticMonteCarloSampler,
-        "stratified": StratifiedSampler,
+        #"stratified": StratifiedSampler,
         "full": FullSampler,
         "kendall": KendallSampler,
         "mallows": MallowsSampler,

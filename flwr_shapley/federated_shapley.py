@@ -123,40 +123,66 @@ class OneRoundReconstructor:
         return shapley_values(self.client_ids, self.permutations, evaluate_subset)
 
 
-def multi_round_reconstruction(
-    server_round: int,
-    results: List[Tuple[ClientProxy, FitRes]],
-    failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
-    evaluate_fn: Callable,
-    aggregate_fit: Callable = FedAvg.aggregate_fit,
-    sampler: Sampler = FullSampler,
-) -> Optional[Dict[int, float]]:
-    """Compute Shapley values for a single round by evaluating all subset aggregations.
+class MultiRoundReconstructor:
+    """Compute Shapley values each round by evaluating subset aggregations independently.
 
-    Samples fresh permutations each round, aggregates each subset, evaluates,
-    and computes Shapley values via the permutation-based formula.
+    Each round: sample fresh permutations, aggregate each subset, evaluate,
+    and compute Shapley values via the permutation-based formula.
+    Collects per-round values; returns full history on the final round.
     """
-    if not results:
+
+    def __init__(
+        self,
+        sampler: Sampler,
+        evaluate_fn: Callable,
+        num_rounds: int,
+        aggregate_fit: Callable = FedAvg.aggregate_fit,
+    ):
+        self.sampler = sampler
+        self.evaluate_fn = evaluate_fn
+        self.num_rounds = num_rounds
+        self.aggregate_fit = aggregate_fit
+        # client_id -> list of per-round Shapley values
+        self.history: Dict[int, List[float]] = {}
+
+    def on_round(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, FitRes]],
+        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
+    ) -> Optional[Dict[int, List[float]]]:
+        """Compute Shapley values for this round, accumulate history.
+
+        Returns the full per-round history Dict[int, List[float]] on the
+        final round, None otherwise.
+        """
+        if not results:
+            return None
+
+        result_ids = [fitres.metrics["client_id"] for (_, fitres) in results]
+        results_by_id = {
+            fitres.metrics["client_id"]: (proxy, fitres)
+            for proxy, fitres in results
+        }
+
+        self.sampler.generate_samples(result_ids)
+        if not self.sampler.samples:
+            return None
+
+        def evaluate_subset(subset: tuple[int, ...]) -> float:
+            sub_results = [results_by_id[cid] for cid in subset]
+            parameters_aggregated, _ = self.aggregate_fit(server_round, sub_results, failures)
+            weights_aggregated = parameters_to_ndarrays(parameters_aggregated)
+            loss, metrics = self.evaluate_fn(server_round, weights_aggregated, {})
+            accuracy = metrics["accuracy"]
+            print(f"[shapley] subset {subset} -> accuracy: {round(100 * accuracy, 2)}%")
+            return accuracy
+
+        round_values = shapley_values(result_ids, self.sampler.samples, evaluate_subset)
+        for client_id, value in round_values.items():
+            self.history.setdefault(client_id, []).append(value)
+
+        if server_round == self.num_rounds:
+            return self.history
+
         return None
-    if evaluate_fn is None:
-        return None
-
-    result_ids = [fitres.metrics["client_id"] for (_, fitres) in results]
-    results_by_id = {
-        fitres.metrics["client_id"]: (proxy, fitres)
-        for proxy, fitres in results
-    }
-
-    sampler = sampler(seed=server_round)
-    sampler.generate_samples(result_ids)
-    if not sampler.samples:
-        return None
-
-    def evaluate_subset(subset: tuple[int, ...]) -> float:
-        sub_results = [results_by_id[cid] for cid in subset]
-        parameters_aggregated, _ = aggregate_fit(server_round, sub_results, failures)
-        weights_aggregated = parameters_to_ndarrays(parameters_aggregated)
-        loss, metrics = evaluate_fn(server_round, weights_aggregated, {})
-        return metrics["accuracy"]
-
-    return shapley_values(result_ids, sampler.samples, evaluate_subset)
