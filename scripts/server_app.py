@@ -206,6 +206,7 @@ def server_fn(context: Context) -> ServerAppComponents:
     contribution_method: str = str(run_config.get("contribution-method", "one-round"))
     sampler_type: str = str(run_config.get("sampler-type", "monte-carlo"))
     num_samples: int = int(run_config.get("num-samples", 2))
+    seed: int = int(run_config.get("seed", 42))
 
     SAMPLERS = {
         "monte-carlo": MonteCarloSampler,
@@ -250,14 +251,14 @@ def server_fn(context: Context) -> ServerAppComponents:
     if use_contributions:
         StrategyClass = create_contribution_strategy(
             parent_strategy=ParentStrategy,
-            sampler=SamplerClass(samplesize=num_samples, seed=42),
+            sampler=SamplerClass(samplesize=num_samples, seed=seed),
             method=contribution_method,
             num_rounds=num_rounds,
             aggregation_strategy_name=aggregation_strategy,
             sampler_type_name=sampler_type,
             num_clients=num_clients,
             split_method=str(run_config.get("split-method", "uniform")),
-            seed=42,
+            seed=seed,
         )
     else:
         StrategyClass = ParentStrategy
