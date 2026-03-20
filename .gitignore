@@ -1,0 +1,6 @@
+.flwr/
+Dockerfile
+.dockerignore
+compose.yaml
+results/*
+!results/.gitkeep

@@ -46,9 +46,9 @@ fraction-evaluate = 0.0
 
 # Task
 experiment = "cifar10"
-batch-size = 1024
+batch-size = 128
 learning-rate = 0.001
-local-epochs = 1
+local-epochs = 5
 split-method = "uniform"
 dirichlet-alpha = 0.5
 
@@ -57,6 +57,6 @@ aggregation-strategy = "fedavg"
 
 # Shapley
 use-contributions = true
-contribution-method = "multi-round"
-sampler-type = "mallows"
+contribution-method = "one-round"
+sampler-type = "monte-carlo"
 num-samples = 2

@@ -2,6 +2,7 @@
 
 import importlib
 import logging
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -23,12 +24,56 @@ from task.data_utils import ndarrays_from_model, ndarrays_to_model
 
 logger = logging.getLogger(__name__)
 
+RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
+
+
+def save_shapley_toml(
+    shapley_history: Dict[int, List[float]],
+    aggregation_strategy: str,
+    contribution_method: str,
+    sampler_type: str,
+    num_rounds: int,
+    num_clients: int,
+    split_method: str = "uniform",
+    seed: int = 42,
+) -> Path:
+    """Save Shapley value history to a .toml file in results/."""
+    RESULTS_DIR.mkdir(exist_ok=True)
+    filename = f"shapley_{aggregation_strategy}_{contribution_method}_{sampler_type}_{split_method}_seed{seed}.toml"
+    path = RESULTS_DIR / filename
+
+    lines = [
+        "[metadata]",
+        f'aggregation-strategy = "{aggregation_strategy}"',
+        f'contribution-method = "{contribution_method}"',
+        f'sampler-type = "{sampler_type}"',
+        f'split-method = "{split_method}"',
+        f"seed = {seed}",
+        f"num-rounds = {num_rounds}",
+        f"num-clients = {num_clients}",
+        "",
+        "[shapley_values]",
+    ]
+    for client_id in sorted(shapley_history):
+        values = shapley_history[client_id]
+        lines.append(f"client_{client_id} = {values}")
+
+    path.write_text("\n".join(lines) + "\n")
+    logger.info("Shapley values saved to %s", path)
+    print(f"[shapley] Results saved to {path}")
+    return path
+
 
 def create_contribution_strategy(
     parent_strategy=FedAvg,
     sampler: Sampler = MonteCarloSampler,
     method: str = "one-round",
     num_rounds: int = 1,
+    aggregation_strategy_name: str = "fedavg",
+    sampler_type_name: str = "monte-carlo",
+    num_clients: int = 2,
+    split_method: str = "uniform",
+    seed: int = 42,
 ):
     """Create a strategy subclass that measures client contributions via Shapley values.
 
@@ -75,6 +120,12 @@ def create_contribution_strategy(
             self.sampler = sampler
             self.method = method
             self.reconstructor = None
+            self._aggregation_strategy_name = aggregation_strategy_name
+            self._sampler_type_name = sampler_type_name
+            self._num_clients = num_clients
+            self._num_rounds = num_rounds
+            self._split_method = split_method
+            self._seed = seed
             # Keep our own copy since FedAvg sets self.initial_parameters = None
             self._current_parameters = parameters_to_ndarrays(initial_parameters) if initial_parameters else None
             if method == "one-round":
@@ -111,9 +162,15 @@ def create_contribution_strategy(
                 # Print permutations on first round
                 if server_round == 1:
                     print(f"[shapley] Permutations: {self.reconstructor.permutations}")
-                # Print Shapley values on final round
+                # Save Shapley values on final round
                 if shapley_result is not None:
                     print(f"[shapley] Final Shapley values: {shapley_result}")
+                    save_shapley_toml(
+                        shapley_result, self._aggregation_strategy_name,
+                        self.method, self._sampler_type_name,
+                        self._num_rounds, self._num_clients,
+                        self._split_method, self._seed,
+                    )
 
             elif self.method == "multi-round":
                 shapley_result = self.reconstructor.on_round(
@@ -121,6 +178,12 @@ def create_contribution_strategy(
                 )
                 if shapley_result is not None:
                     print(f"[shapley] Final Shapley value history: {shapley_result}")
+                    save_shapley_toml(
+                        shapley_result, self._aggregation_strategy_name,
+                        self.method, self._sampler_type_name,
+                        self._num_rounds, self._num_clients,
+                        self._split_method, self._seed,
+                    )
 
             # Perform normal aggregation
             aggregated = super().aggregate_fit(server_round, results, failures)
@@ -190,6 +253,11 @@ def server_fn(context: Context) -> ServerAppComponents:
             sampler=SamplerClass(samplesize=num_samples, seed=42),
             method=contribution_method,
             num_rounds=num_rounds,
+            aggregation_strategy_name=aggregation_strategy,
+            sampler_type_name=sampler_type,
+            num_clients=num_clients,
+            split_method=str(run_config.get("split-method", "uniform")),
+            seed=42,
         )
     else:
         StrategyClass = ParentStrategy

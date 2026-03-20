@@ -52,14 +52,16 @@ class OneRoundReconstructor:
         self.client_gradients: Dict[int, NDArrays] = {}
         self.client_num_examples: Dict[int, int] = {}
         self.initial_parameters: NDArrays = None
+        # client_id -> list of Shapley values (single entry for one-round)
+        self.history: Dict[int, List[float]] = {}
 
     def one_round(
         self,
         server_round: int,
         results: List[Tuple[ClientProxy, FitRes]],
         current_parameters: NDArrays,
-    ) -> Optional[Dict[int, float]]:
-        """Process one round of results. Returns Shapley values on the final round."""
+    ) -> Optional[Dict[int, List[float]]]:
+        """Process one round of results. Returns Shapley value history on the final round."""
         if not results:
             return None
 
@@ -90,9 +92,12 @@ class OneRoundReconstructor:
                 ]
                 self.client_num_examples[client_id] += fitres.num_examples
 
-        # Final round: compute Shapley values
+        # Final round: compute Shapley values and store in history
         if server_round == self.num_rounds:
-            return self._compute_shapley()
+            final_values = self._compute_shapley()
+            for client_id, value in final_values.items():
+                self.history.setdefault(client_id, []).append(value)
+            return self.history
 
         return None
 
