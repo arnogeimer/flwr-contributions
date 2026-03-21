@@ -5,7 +5,7 @@ from shapley.probabilistic_samplers import (
     MonteCarloSampler,
     AntitheticMonteCarloSampler,
     StratifiedSampler,
-    inverse,
+    reverse,
 )
 from shapley.kernel_samplers import (
     KendallSampler,
@@ -50,23 +50,18 @@ for n in [0, 1, 5, 10]:
     if amc.samples:
         samples_set = set(amc.samples)
         for pi in list(amc.samples)[:n]:  # check original samples
-            pi_inv = inverse(pi)
+            pi_inv = reverse(pi)
             if pi_inv not in samples_set:
                 print(f"    MISSING INVERSE: {pi} -> {pi_inv}")
 
-# Verify inverse correctness
-print("\n--- Inverse verification ---")
+# Verify reverse correctness
+print("\n--- Reverse verification ---")
 mc = MonteCarloSampler(samplesize=5, seed=42)
 mc.generate_samples(clients)
 for pi in mc.samples:
-    pi_inv = inverse(pi)
-    # Compose: sigma[i] = pi[sorted.index(pi_inv[i])]
-    sorted_elems = sorted(pi)
-    sigma = {sorted_elems[i]: pi[i] for i in range(len(pi))}
-    sigma_inv = {sorted_elems[i]: pi_inv[i] for i in range(len(pi))}
-    composition = tuple(sigma[sigma_inv[e]] for e in sorted_elems)
-    ok = composition == tuple(sorted_elems)
-    print(f"  pi={pi}  inv={pi_inv}  pi*inv={composition}  {'OK' if ok else 'FAIL'}")
+    pi_rev = reverse(pi)
+    ok = reverse(pi_rev) == pi
+    print(f"  pi={pi}  rev={pi_rev}  rev(rev)={reverse(pi_rev)}  {'OK' if ok else 'FAIL'}")
 
 # StratifiedSampler
 print("\n--- StratifiedSampler ---")

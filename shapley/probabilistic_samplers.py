@@ -18,15 +18,9 @@ import numpy as np
 Permutation = tuple[int, ...]
 
 
-def inverse(pi: Permutation) -> Permutation:
-    """Return the inverse permutation such that pi * inverse(pi) = identity.
-
-    Treats pi as a bijection on its element set: sorted[i] -> pi[i].
-    The inverse maps pi[i] -> sorted[i], applied to the sorted elements.
-    """
-    sorted_elements = sorted(pi)
-    sigma_inv = {pi[i]: sorted_elements[i] for i in range(len(pi))}
-    return tuple(sigma_inv[e] for e in sorted_elements)
+def reverse(pi: Permutation) -> Permutation:
+    """Return the reversed permutation."""
+    return pi[::-1]
 
 
 class Sampler(object):
@@ -42,10 +36,10 @@ class Sampler(object):
         self._generate_samples(results)
 
     def add_antithetic_samples(self):
-        """Add the inverse of each permutation."""
+        """Add the reverse of each permutation."""
         expanded = set(self.samples)
         for entry in self.samples:
-            expanded.add(inverse(entry))
+            expanded.add(reverse(entry))
         self.samples = list(expanded)
 
 
